@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  py_service:
+    build: 
+      context: ../py_service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../shared:/app/shared
+    environment:
+      - MODEL_PATH=/app/models
+
+  go_service:
+    build:
+      context: ../go_service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PY_SERVICE_URL=http://py_service:8000
+    depends_on:
+      - py_service 
