@@ -3,14 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 )
 
 type AnalyzeRequest struct {
-	Text  string `json:"text"`
-	Model string `json:"model"`
+	Text        string `json:"text"`
+	Model       string `json:"model"`
+	OllamaModel string `json:"ollama_model"`
 }
 
 type AnalyzeResponse struct {
@@ -25,6 +27,7 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -36,6 +39,10 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func main() {
+	// 设置日志输出编码
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	http.HandleFunc("/analyze", enableCORS(handleAnalyze))
 	http.HandleFunc("/health", enableCORS(handleHealth))
 
@@ -49,7 +56,7 @@ func main() {
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }
 
@@ -59,8 +66,16 @@ func handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 读取请求体
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "读取请求失败", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
 	var req AnalyzeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "无效的请求体", http.StatusBadRequest)
 		return
 	}
@@ -77,19 +92,26 @@ func handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := http.Post(pyServiceURL+"/analyze", "application/json", bytes.NewBuffer(pyReq))
+	resp, err := http.Post(pyServiceURL+"/analyze", "application/json; charset=utf-8", bytes.NewBuffer(pyReq))
 	if err != nil {
 		http.Error(w, "Python服务调用失败", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
+	// 读取响应体
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "读取响应失败", http.StatusInternalServerError)
+		return
+	}
+
 	var result AnalyzeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		http.Error(w, "响应解析失败", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(result)
 }

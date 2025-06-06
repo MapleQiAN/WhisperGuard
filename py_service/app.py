@@ -8,9 +8,17 @@ import json
 import requests
 import aiohttp
 import asyncio
+import sys
+
+# 设置默认编码为 UTF-8
+if sys.platform.startswith('win'):
+    import locale
+    locale.setlocale(locale.LC_ALL, 'zh_CN.UTF-8')
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # 加载环境变量
-load_dotenv()
+load_dotenv(encoding='utf-8')
 
 app = FastAPI(title="WhisprGuard API", description="语义隐私助手API服务")
 
